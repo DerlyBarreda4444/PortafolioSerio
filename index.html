@@ -18,7 +18,7 @@
     transition: opacity 0.6s ease;
   }
   #stage-rick.hide { opacity: 0; pointer-events: none; }
-  #stage-rick iframe {
+  #stage-rick iframe, #ytplayer {
     width: 100%; height: 100%; border: 0; pointer-events: none;
   }
   #rick-hint {
@@ -29,7 +29,7 @@
   }
   @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.4; } }
 
-  /* ---------- ETAPA 2: TEXTO PLANO A PROPÓSITO xdddddddddddd ---------- */
+  /* ---------- ETAPA 2: TEXTO PLANO A PROPÓSITO ---------- */
   #stage-plain {
     position: fixed; inset: 0;
     background: #ffffff;
@@ -44,7 +44,7 @@
     color: #000000;
   }
 
-  /* ---------- ETAPA 3: PÁGINA "BONITA" bueee (sube como cortina así q god) ---------- */
+  /* ---------- ETAPA 3: PÁGINA "BONITA" (sube como cortina) ---------- */
   #stage-final {
     position: fixed; inset: 0;
     z-index: 25;
@@ -109,10 +109,7 @@
 
   <!-- ETAPA 1 -->
   <div id="stage-rick">
-    <iframe id="ytf"
-      src="https://www.youtube-nocookie.com/embed/dQw4w9WgXcQ?autoplay=1&mute=1&controls=0&modestbranding=1&rel=0&playsinline=1"
-      title="cargando" allow="autoplay; encrypted-media" allowfullscreen>
-    </iframe>
+    <div id="ytplayer"></div>
     <div id="rick-hint">Cargando portafolio… haz clic si no ves nada</div>
   </div>
 
@@ -135,34 +132,81 @@
     <div class="stripes"></div>
   </div>
 
+<script src="https://www.youtube.com/iframe_api"></script>
 <script>
+  // ID del video. Este es un reupload sin anuncios usado comúnmente para rickrolls.
+  // Si algún día deja de funcionar, busca "rickroll no ads" en YouTube y copia el ID de otra URL.
+  const VIDEO_ID = "iik25wqIuFo";
+
   const rickStage = document.getElementById('stage-rick');
   const plainStage = document.getElementById('stage-plain');
   const finalStage = document.getElementById('stage-final');
-  const ytf = document.getElementById('ytf');
   const hint = document.getElementById('rick-hint');
 
-  // Un clic en cualquier parte de la etapa 1 intenta activar el sonido
+  let player;
+  let started = false; // para no reiniciar el temporizador si el evento PLAYING dispara más de una vez
+
+  function onYouTubeIframeAPIReady() {
+    player = new YT.Player('ytplayer', {
+      videoId: VIDEO_ID,
+      playerVars: {
+        autoplay: 1, mute: 1, controls: 0, modestbranding: 1,
+        rel: 0, playsinline: 1, disablekb: 1
+      },
+      events: { onStateChange: onPlayerStateChange }
+    });
+    // Red de seguridad: si a los 20s el video nunca reportó estar reproduciendo
+    // (bloqueador de anuncios, error de red, etc.), avanzamos igual.
+    setTimeout(() => { if (!started) { started = true; goToStage2After(0); } }, 20000);
+  }
+
+  function onPlayerStateChange(e) {
+    // Estado 1 = reproduciendo. Esto solo dispara cuando el VIDEO real (no el anuncio) arranca.
+    if (e.data === YT.PlayerState.PLAYING && !started) {
+      started = true;
+      goToStage2After(12000);
+    }
+  }
+
+  // Clic en cualquier parte de la etapa 1 activa el sonido
   rickStage.addEventListener('click', () => {
-    ytf.src = "https://www.youtube-nocookie.com/embed/dQw4w9WgXcQ?autoplay=1&mute=0&controls=0&modestbranding=1&rel=0&playsinline=1";
+    if (player && player.unMute) {
+      player.unMute();
+      player.setVolume(70);
+    }
     hint.style.display = 'none';
   });
 
-  // Después de ~12s, pasamos a la etapa 2 (texto plano, a propósito feo)
-  setTimeout(() => {
-    rickStage.classList.add('hide');
-    setTimeout(() => {
-      rickStage.style.display = 'none';
-      plainStage.style.display = 'flex';
-    }, 600);
-  }, 12000);
+  function fadeVolumeOut(durationMs) {
+    if (!player || !player.setVolume) return;
+    const steps = 12;
+    const startVol = player.isMuted() ? 0 : player.getVolume();
+    let i = 0;
+    const interval = setInterval(() => {
+      i++;
+      const v = Math.max(0, Math.round(startVol * (1 - i / steps)));
+      player.setVolume(v);
+      if (i >= steps) clearInterval(interval);
+    }, durationMs / steps);
+  }
 
-  // 4s después de la etapa 2, la página final sube como cortina y la tapa
-  setTimeout(() => {
-    finalStage.classList.add('show');
-    // limpiamos la etapa fea de atrás una vez ya quedó cubierta
-    setTimeout(() => { plainStage.style.display = 'none'; }, 1200);
-  }, 16000);
+  function goToStage2After(delayMs) {
+    setTimeout(() => {
+      fadeVolumeOut(600); // baja el volumen suave justo antes del corte
+      rickStage.classList.add('hide');
+      setTimeout(() => {
+        rickStage.style.display = 'none';
+        if (player && player.stopVideo) player.stopVideo();
+        plainStage.style.display = 'flex';
+      }, 600);
+    }, delayMs);
+
+    // 4s después de la etapa 2, la página final sube como cortina y la tapa
+    setTimeout(() => {
+      finalStage.classList.add('show');
+      setTimeout(() => { plainStage.style.display = 'none'; }, 1200);
+    }, delayMs + 4000);
+  }
 </script>
 
 </body>
