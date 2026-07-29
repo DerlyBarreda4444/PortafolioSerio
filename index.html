@@ -8,7 +8,7 @@
   * { box-sizing: border-box; margin: 0; padding: 0; }
   html, body { width: 100%; height: 100%; overflow: hidden; }
 
-  /* ---------- ETAPA 1: RICKROLL ---------- */
+  /* ---------- ETAPA 1: PANTALLA DE "CARGA" (sin video hasta el clic) ---------- */
   #stage-rick {
     position: fixed; inset: 0;
     background: #000;
@@ -18,16 +18,24 @@
     transition: opacity 0.6s ease;
   }
   #stage-rick.hide { opacity: 0; pointer-events: none; }
-  #stage-rick iframe, #ytplayer {
-    width: 100%; height: 100%; border: 0; pointer-events: none;
+
+  #loading-ui {
+    color: #fff; font-family: Arial, sans-serif; text-align: center;
   }
-  #rick-hint {
-    position: absolute; bottom: 24px; left: 50%; transform: translateX(-50%);
-    color: #fff; font-family: Arial, sans-serif; font-size: 14px;
-    background: rgba(0,0,0,0.55); padding: 8px 16px; border-radius: 20px;
-    animation: pulse 1.4s infinite;
+  .spinner {
+    width: 46px; height: 46px; margin: 0 auto 18px;
+    border: 4px solid rgba(255,255,255,0.25);
+    border-top-color: #fff; border-radius: 50%;
+    animation: spin 0.9s linear infinite;
   }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  #loading-ui p { font-size: 15px; animation: pulse 1.4s infinite; }
   @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.4; } }
+
+  #vimeo-wrap {
+    position: absolute; inset: 0; display: none;
+  }
+  #vimeo-wrap iframe { width: 100%; height: 100%; border: 0; pointer-events: none; }
 
   /* ---------- ETAPA 2: TEXTO PLANO A PROPÓSITO ---------- */
   #stage-plain {
@@ -109,8 +117,11 @@
 
   <!-- ETAPA 1 -->
   <div id="stage-rick">
-    <div id="ytplayer"></div>
-    <div id="rick-hint">Cargando portafolio… haz clic si no ves nada</div>
+    <div id="loading-ui">
+      <div class="spinner"></div>
+      <p>Cargando portafolio… haz clic para continuar</p>
+    </div>
+    <div id="vimeo-wrap"></div>
   </div>
 
   <!-- ETAPA 2 -->
@@ -132,71 +143,72 @@
     <div class="stripes"></div>
   </div>
 
-<script src="https://www.youtube.com/iframe_api"></script>
+<script src="https://player.vimeo.com/api/player.js"></script>
 <script>
-  // ID del video. Este es un reupload sin anuncios usado comúnmente para rickrolls.
-  // Si algún día deja de funcionar, busca "rickroll no ads" en YouTube y copia el ID de otra URL.
-  const VIDEO_ID = "iik25wqIuFo";
+  // ID de video en Vimeo. Los embeds de Vimeo casi nunca traen anuncios.
+  const VIMEO_ID = "148751763";
 
   const rickStage = document.getElementById('stage-rick');
+  const loadingUi = document.getElementById('loading-ui');
+  const vimeoWrap = document.getElementById('vimeo-wrap');
   const plainStage = document.getElementById('stage-plain');
   const finalStage = document.getElementById('stage-final');
-  const hint = document.getElementById('rick-hint');
 
-  let player;
-  let started = false; // para no reiniciar el temporizador si el evento PLAYING dispara más de una vez
+  let vimeoPlayer;
+  let started = false;
+  let clicked = false;
 
-  function onYouTubeIframeAPIReady() {
-    player = new YT.Player('ytplayer', {
-      videoId: VIDEO_ID,
-      playerVars: {
-        autoplay: 1, mute: 1, controls: 0, modestbranding: 1,
-        rel: 0, playsinline: 1, disablekb: 1
-      },
-      events: { onStateChange: onPlayerStateChange }
-    });
-    // Red de seguridad: si a los 20s el video nunca reportó estar reproduciendo
-    // (bloqueador de anuncios, error de red, etc.), avanzamos igual.
-    setTimeout(() => { if (!started) { started = true; goToStage2After(0); } }, 20000);
-  }
-
-  function onPlayerStateChange(e) {
-    // Estado 1 = reproduciendo. Esto solo dispara cuando el VIDEO real (no el anuncio) arranca.
-    if (e.data === YT.PlayerState.PLAYING && !started) {
-      started = true;
-      goToStage2After(12000);
-    }
-  }
-
-  // Clic en cualquier parte de la etapa 1 activa el sonido
+  // El iframe se crea RECIÉN al hacer clic. Esto es clave: los navegadores
+  // permiten audio real cuando el elemento nace directamente dentro del
+  // gesto del usuario, a diferencia de "desmutear" algo que ya estaba cargado.
   rickStage.addEventListener('click', () => {
-    if (player && player.unMute) {
-      player.unMute();
-      player.setVolume(70);
-    }
-    hint.style.display = 'none';
+    if (clicked) return;
+    clicked = true;
+
+    loadingUi.style.display = 'none';
+    vimeoWrap.style.display = 'block';
+    vimeoWrap.innerHTML =
+      '<iframe src="https://player.vimeo.com/video/' + VIMEO_ID +
+      '?autoplay=1&muted=0&background=0&controls=0&title=0&byline=0&portrait=0&loop=0"' +
+      ' allow="autoplay; fullscreen" allowfullscreen></iframe>';
+
+    const iframeEl = vimeoWrap.querySelector('iframe');
+    vimeoPlayer = new Vimeo.Player(iframeEl);
+    vimeoPlayer.setVolume(1).catch(() => {});
+
+    vimeoPlayer.on('play', () => {
+      if (!started) {
+        started = true;
+        goToStage2After(12000);
+      }
+    });
+
+    // Red de seguridad: si Vimeo nunca confirma que empezó a reproducir
+    // (bloqueador de contenido, error de red), avanzamos igual a los 15s.
+    setTimeout(() => { if (!started) { started = true; goToStage2After(0); } }, 15000);
   });
 
-  function fadeVolumeOut(durationMs) {
-    if (!player || !player.setVolume) return;
-    const steps = 12;
-    const startVol = player.isMuted() ? 0 : player.getVolume();
-    let i = 0;
-    const interval = setInterval(() => {
-      i++;
-      const v = Math.max(0, Math.round(startVol * (1 - i / steps)));
-      player.setVolume(v);
-      if (i >= steps) clearInterval(interval);
-    }, durationMs / steps);
+  function fadeVolumeTo(target, durationMs) {
+    if (!vimeoPlayer) return;
+    vimeoPlayer.getVolume().then(startVol => {
+      const steps = 12;
+      let i = 0;
+      const interval = setInterval(() => {
+        i++;
+        const v = startVol + (target - startVol) * (i / steps);
+        vimeoPlayer.setVolume(v).catch(() => {});
+        if (i >= steps) clearInterval(interval);
+      }, durationMs / steps);
+    }).catch(() => {});
   }
 
   function goToStage2After(delayMs) {
     setTimeout(() => {
-      fadeVolumeOut(600); // baja el volumen suave justo antes del corte
+      // Bajamos a 33% en vez de cortar: sigue sonando de fondo, como soundtrack.
+      fadeVolumeTo(0.33, 800);
       rickStage.classList.add('hide');
       setTimeout(() => {
-        rickStage.style.display = 'none';
-        if (player && player.stopVideo) player.stopVideo();
+        rickStage.style.zIndex = 5; // se queda sonando detrás, ya no se ve
         plainStage.style.display = 'flex';
       }, 600);
     }, delayMs);
