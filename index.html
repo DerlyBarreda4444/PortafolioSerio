@@ -8,11 +8,12 @@
   * { box-sizing: border-box; margin: 0; padding: 0; }
   html, body { width: 100%; height: 100%; overflow: hidden; }
 
-  /* ---------- ETAPA 1: PANTALLA DE "CARGA" (sin video hasta el clic) ---------- */
+  /* ---------- ETAPA 1: PANTALLA DE "CARGA" + GIF Y AUDIO ---------- */
   #stage-rick {
     position: fixed; inset: 0;
     background: #000;
     display: flex; align-items: center; justify-content: center;
+    flex-direction: column;
     z-index: 30;
     cursor: pointer;
     transition: opacity 0.6s ease;
@@ -32,10 +33,15 @@
   #loading-ui p { font-size: 15px; animation: pulse 1.4s infinite; }
   @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.4; } }
 
-  #vimeo-wrap {
+  /* Contenedor del GIF oculto hasta el clic */
+  #gif-wrap {
     position: absolute; inset: 0; display: none;
+    background: #000;
+    align-items: center; justify-content: center;
   }
-  #vimeo-wrap iframe { width: 100%; height: 100%; border: 0; pointer-events: none; }
+  #gif-wrap img {
+    width: 100%; height: 100%; object-fit: contain;
+  }
 
   /* ---------- ETAPA 2: TEXTO PLANO A PROPÓSITO ---------- */
   #stage-plain {
@@ -121,7 +127,10 @@
       <div class="spinner"></div>
       <p>Cargando portafolio… haz clic para continuar</p>
     </div>
-    <div id="vimeo-wrap"></div>
+    <div id="gif-wrap">
+      <!-- Cambia 'tu-gif-animado.gif' por el nombre de tu archivo GIF -->
+      <img src="tu-gif-animado.gif" alt="Rickroll GIF">
+    </div>
   </div>
 
   <!-- ETAPA 2 -->
@@ -143,81 +152,65 @@
     <div class="stripes"></div>
   </div>
 
-<script src="https://player.vimeo.com/api/player.js"></script>
 <script>
-  // ID de video en Vimeo. Los embeds de Vimeo casi nunca traen anuncios.
-  const VIMEO_ID = "148751763";
+  // Nombre de tu archivo MP3 descargado
+  const AUDIO_FILENAME = "rickroll.mp3";
 
   const rickStage = document.getElementById('stage-rick');
   const loadingUi = document.getElementById('loading-ui');
-  const vimeoWrap = document.getElementById('vimeo-wrap');
+  const gifWrap = document.getElementById('gif-wrap');
   const plainStage = document.getElementById('stage-plain');
   const finalStage = document.getElementById('stage-final');
 
-  let vimeoPlayer;
-  let started = false;
+  let audioPlayer = null;
   let clicked = false;
 
-  // El iframe se crea RECIÉN al hacer clic. Esto es clave: los navegadores
-  // permiten audio real cuando el elemento nace directamente dentro del
-  // gesto del usuario, a diferencia de "desmutear" algo que ya estaba cargado.
+  // Al hacer clic, activamos el audio y mostramos el GIF de una vez
   rickStage.addEventListener('click', () => {
     if (clicked) return;
     clicked = true;
 
     loadingUi.style.display = 'none';
-    vimeoWrap.style.display = 'block';
-    vimeoWrap.innerHTML =
-      '<iframe src="https://player.vimeo.com/video/' + VIMEO_ID +
-      '?autoplay=1&muted=0&background=0&controls=0&title=0&byline=0&portrait=0&loop=0"' +
-      ' allow="autoplay; fullscreen" allowfullscreen></iframe>';
+    gifWrap.style.display = 'flex';
 
-    const iframeEl = vimeoWrap.querySelector('iframe');
-    vimeoPlayer = new Vimeo.Player(iframeEl);
-    vimeoPlayer.setVolume(1).catch(() => {});
+    // Creamos el elemento de audio de forma dinámica para cumplir las reglas del navegador
+    audioPlayer = new Audio(AUDIO_FILENAME);
+    audioPlayer.volume = 1.0; // Empieza al 100%
+    audioPlayer.loop = true;  // Por si se demora en transicionar
+    audioPlayer.play().catch(err => console.log("Error al reproducir audio:", err));
 
-    vimeoPlayer.on('play', () => {
-      if (!started) {
-        started = true;
-        goToStage2After(12000);
-      }
-    });
-
-    // Red de seguridad: si Vimeo nunca confirma que empezó a reproducir
-    // (bloqueador de contenido, error de red), avanzamos igual a los 15s.
-    setTimeout(() => { if (!started) { started = true; goToStage2After(0); } }, 15000);
-  });
-
-  function fadeVolumeTo(target, durationMs) {
-    if (!vimeoPlayer) return;
-    vimeoPlayer.getVolume().then(startVol => {
-      const steps = 12;
-      let i = 0;
-      const interval = setInterval(() => {
-        i++;
-        const v = startVol + (target - startVol) * (i / steps);
-        vimeoPlayer.setVolume(v).catch(() => {});
-        if (i >= steps) clearInterval(interval);
-      }, durationMs / steps);
-    }).catch(() => {});
-  }
-
-  function goToStage2After(delayMs) {
+    // A los 12 segundos exactos pasamos a la etapa 2 y bajamos el volumen al 33%
     setTimeout(() => {
-      // Bajamos a 33% en vez de cortar: sigue sonando de fondo, como soundtrack.
+      // Bajar volumen al 33% (0.33)
       fadeVolumeTo(0.33, 800);
+
+      // Ocultar pantalla de rickroll
       rickStage.classList.add('hide');
       setTimeout(() => {
-        rickStage.style.zIndex = 5; // se queda sonando detrás, ya no se ve
+        rickStage.style.zIndex = 5; // Queda atrás sonando
         plainStage.style.display = 'flex';
       }, 600);
-    }, delayMs);
+    }, 12000);
 
-    // 4s después de la etapa 2, la página final sube como cortina y la tapa
+    // 4 segundos después de la etapa 2, sube la cortina final
     setTimeout(() => {
       finalStage.classList.add('show');
       setTimeout(() => { plainStage.style.display = 'none'; }, 1200);
-    }, delayMs + 4000);
+    }, 12000 + 4000);
+  });
+
+  // Función suave para transicionar el volumen del MP3
+  function fadeVolumeTo(target, durationMs) {
+    if (!audioPlayer) return;
+    const startVol = audioPlayer.volume;
+    const steps = 12;
+    let i = 0;
+    const interval = setInterval(() => {
+      i++;
+      const v = startVol + (target - startVol) * (i / steps);
+      audioPlayer.volume = Math.max(0, Math.min(1, v));
+      if (i >= steps) clearInterval(interval);
+    }, durationMs / steps);
   }
 </script>
 
