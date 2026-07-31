@@ -3,18 +3,19 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>xd</title>
+<title>Portafolio Web</title>
+<link rel="preload" as="image" href="tu-gif-animado.gif">
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
   html, body { width: 100%; height: 100%; overflow: hidden; font-family: 'Segoe UI', Arial, sans-serif; }
 
-  /* ---------- BOTÓN DE SONIDO (honesto, chiquito, no tapa nada) ---------- */
+  /* ---------- BOTÓN DE SONIDO (persistente, sin emojis) ---------- */
   #audio-control {
     position: fixed;
     top: 16px;
     right: 16px;
     z-index: 100;
-    display: none;
+    display: block;
     background: rgba(255, 255, 255, 0.2);
     backdrop-filter: blur(8px);
     border: 1px solid rgba(255, 255, 255, 0.4);
@@ -51,6 +52,48 @@
     background: linear-gradient(135deg, #1f2937, #111827 60%, #0b0f1a);
     color: #f5f5f5;
     padding: 20px;
+    overflow: hidden;
+  }
+
+  /* Grid decorativo de fondo, responsivo */
+  .grid-deco {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    grid-template-columns: repeat(6, 1fr);
+    grid-template-rows: repeat(4, 1fr);
+    opacity: 0.06;
+    pointer-events: none;
+    z-index: 0;
+  }
+  .grid-deco div { border: 1px solid #ffffff; }
+  @media (max-width: 640px) {
+    .grid-deco { grid-template-columns: repeat(3, 1fr); grid-template-rows: repeat(6, 1fr); }
+  }
+
+  /* Efecto de foco suave que sigue al mouse, con borde difuminado */
+  .spotlight {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    pointer-events: none;
+    background: radial-gradient(
+      circle 260px at var(--mx, 50%) var(--my, 50%),
+      rgba(255,255,255,0.16),
+      rgba(255,255,255,0.07) 40%,
+      rgba(255,255,255,0) 72%
+    );
+    transition: background-position 0.05s linear;
+  }
+
+  /* El contenido va encima de ambas capas, siempre legible sin importar el mouse */
+  #final-stage > .content {
+    position: relative;
+    z-index: 2;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
   }
 
   .cone { font-size: 70px; animation: bounce 1.6s ease-in-out infinite; }
@@ -84,7 +127,7 @@
 </head>
 <body>
 
-  <button id="audio-control">🔊 Activar sonido</button>
+  <button id="audio-control">Reproducir</button>
 
   <!-- GIF: arranca solo al cargar, sin clic ni pantalla falsa -->
   <div id="gif-stage">
@@ -93,48 +136,60 @@
 
   <!-- REVELACIÓN FINAL -->
   <div id="final-stage">
-    <div class="cone">🚧👒</div>
-    <h1>Página en construcción</h1>
-    <p class="sub">Plot twist: no tengo portafolio. Nunca lo tuve xd</p>
-    <p class="apology">✌️ No te enojes, ¡es solo un pequeño chascarrillo! 😅❤️</p>
-    <div class="stripes"></div>
+    <div class="grid-deco">
+      <div></div><div></div><div></div><div></div><div></div><div></div>
+      <div></div><div></div><div></div><div></div><div></div><div></div>
+      <div></div><div></div><div></div><div></div><div></div><div></div>
+      <div></div><div></div><div></div><div></div><div></div><div></div>
+    </div>
+    <div class="spotlight" id="spotlight"></div>
+    <div class="content">
+      <div class="cone">🚧👒</div>
+      <h1>Página en construcción</h1>
+      <p class="sub">Plot twist: no tengo portafolio. Nunca lo tuve xd</p>
+      <p class="apology">No te enojes, es solo un pequeño chascarrillo</p>
+      <div class="stripes"></div>
+    </div>
   </div>
 
 <script>
   const AUDIO_FILENAME = "rickroll.mp3";
+  const START_VOLUME = 0.70;
+  const FADE_VOLUME = 0.25;
 
   const gifStage = document.getElementById('gif-stage');
   const audioBtn = document.getElementById('audio-control');
+  const finalStage = document.getElementById('final-stage');
+  const spotlight = document.getElementById('spotlight');
 
   const audioPlayer = new Audio(AUDIO_FILENAME);
   audioPlayer.loop = true;
-  audioPlayer.volume = 1.0;
+  audioPlayer.volume = START_VOLUME;
   let isPlaying = false;
 
-  // Lo intenta solo, sin pedir ningún clic. Si el navegador lo bloquea
-  // (política normal de autoplay con sonido), mostramos el botoncito.
+  // Lo intenta solo, sin pedir clic. El botón queda visible siempre como
+  // control de pausa/reanudar, sea que el autoplay haya funcionado o no.
   audioPlayer.play()
-    .then(() => { isPlaying = true; })
-    .catch(() => { audioBtn.style.display = 'block'; });
+    .then(() => { isPlaying = true; audioBtn.textContent = "Pausar"; })
+    .catch(() => { isPlaying = false; audioBtn.textContent = "Reproducir"; });
 
   audioBtn.addEventListener('click', () => {
     if (isPlaying) {
       audioPlayer.pause();
-      audioBtn.innerHTML = "🔇 Sonido pausado";
+      audioBtn.textContent = "Reproducir";
       isPlaying = false;
     } else {
       audioPlayer.play().then(() => {
         isPlaying = true;
-        audioBtn.innerHTML = "🔊 Sonido activado";
-        setTimeout(() => { audioBtn.style.display = 'none'; }, 1500);
+        audioBtn.textContent = "Pausar";
       });
     }
   });
 
-  // A los 12 segundos: se va el GIF, se revela el panel final y el audio baja a 33%
+  // A los 12 segundos: se va el GIF, se revela el panel final y el audio baja a 25%
   setTimeout(() => {
     gifStage.classList.add('hide');
-    fadeVolumeTo(0.33, 800);
+    fadeVolumeTo(FADE_VOLUME, 800);
   }, 12000);
 
   function fadeVolumeTo(target, durationMs) {
@@ -148,6 +203,16 @@
       if (i >= steps) clearInterval(interval);
     }, durationMs / steps);
   }
+
+  // Efecto de foco que sigue al mouse (borde suave gracias al radial-gradient con
+  // varios "stops"). El texto vive en su propia capa encima, así que siempre se lee bien.
+  finalStage.addEventListener('mousemove', (e) => {
+    const rect = finalStage.getBoundingClientRect();
+    const mx = ((e.clientX - rect.left) / rect.width) * 100;
+    const my = ((e.clientY - rect.top) / rect.height) * 100;
+    spotlight.style.setProperty('--mx', mx + '%');
+    spotlight.style.setProperty('--my', my + '%');
+  });
 </script>
 
 </body>
