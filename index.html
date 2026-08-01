@@ -78,12 +78,11 @@
     z-index: 1;
     pointer-events: none;
     background: radial-gradient(
-      circle 260px at var(--mx, 50%) var(--my, 50%),
+      circle var(--r, 260px) at var(--mx, 50%) var(--my, 50%),
       rgba(255,255,255,0.16),
       rgba(255,255,255,0.07) 40%,
       rgba(255,255,255,0) 72%
     );
-    transition: background-position 0.05s linear;
   }
 
   /* El contenido va encima de ambas capas, siempre legible sin importar el mouse */
@@ -129,7 +128,7 @@
 
   <button id="audio-control">Reproducir</button>
 
-  <!-- GIF: arranca solo al cargar, sin clic ni pantalla falsa -->
+  <!-- GIF: arranca solo al cargar; el primer toque en cualquier parte también activa el sonido -->
   <div id="gif-stage">
     <img src="tu-gif-animado.gif" alt="Rickroll GIF">
   </div>
@@ -166,24 +165,35 @@
   audioPlayer.loop = true;
   audioPlayer.volume = START_VOLUME;
   let isPlaying = false;
+  let unlocked = false; // ya se logró reproducir al menos una vez
 
-  // Lo intenta solo, sin pedir clic. El botón queda visible siempre como
-  // control de pausa/reanudar, sea que el autoplay haya funcionado o no.
-  audioPlayer.play()
-    .then(() => { isPlaying = true; audioBtn.textContent = "Pausar"; })
-    .catch(() => { isPlaying = false; audioBtn.textContent = "Reproducir"; });
+  function markPlaying() {
+    isPlaying = true;
+    unlocked = true;
+    audioBtn.textContent = "Pausar";
+  }
+  function markBlocked() {
+    isPlaying = false;
+    audioBtn.textContent = "Reproducir";
+  }
 
+  // Lo intenta solo, sin pedir clic, apenas carga la página.
+  audioPlayer.play().then(markPlaying).catch(markBlocked);
+
+  // El botón de la esquina SIEMPRE es pausa/reanuda (nunca "iniciar" como acción aparte).
   audioBtn.addEventListener('click', () => {
     if (isPlaying) {
       audioPlayer.pause();
-      audioBtn.textContent = "Reproducir";
-      isPlaying = false;
+      markBlocked();
     } else {
-      audioPlayer.play().then(() => {
-        isPlaying = true;
-        audioBtn.textContent = "Pausar";
-      });
+      audioPlayer.play().then(markPlaying).catch(markBlocked);
     }
+  });
+
+  // Si el navegador bloqueó el autoplay, el primer toque en el GIF (algo que la
+  // persona hace de forma natural) también sirve para arrancar el sonido.
+  gifStage.addEventListener('click', () => {
+    if (!unlocked) audioPlayer.play().then(markPlaying).catch(markBlocked);
   });
 
   // A los 12 segundos: se va el GIF, se revela el panel final y el audio baja a 25%
@@ -204,15 +214,49 @@
     }, durationMs / steps);
   }
 
-  // Efecto de foco que sigue al mouse (borde suave gracias al radial-gradient con
-  // varios "stops"). El texto vive en su propia capa encima, así que siempre se lee bien.
-  finalStage.addEventListener('mousemove', (e) => {
+  // ---------- SPOTLIGHT: seguimiento suave con retraso, táctil, y encogido por inactividad ----------
+  const ACTIVE_RADIUS = 260;   // px cuando hay actividad
+  const IDLE_RADIUS = 0;       // px cuando lleva 2s sin moverse
+  const IDLE_MS = 2000;
+  const FOLLOW_EASE = 0.12;    // más chico = más "retraso" al seguir (más fluido)
+  const RADIUS_EASE = 0.08;    // qué tan suave crece/encoge el círculo
+
+  let targetX = 50, targetY = 50;
+  let curX = 50, curY = 50;
+  let targetRadius = ACTIVE_RADIUS;
+  let curRadius = ACTIVE_RADIUS;
+  let lastMoveTime = Date.now();
+
+  function updatePointer(clientX, clientY) {
     const rect = finalStage.getBoundingClientRect();
-    const mx = ((e.clientX - rect.left) / rect.width) * 100;
-    const my = ((e.clientY - rect.top) / rect.height) * 100;
-    spotlight.style.setProperty('--mx', mx + '%');
-    spotlight.style.setProperty('--my', my + '%');
-  });
+    targetX = ((clientX - rect.left) / rect.width) * 100;
+    targetY = ((clientY - rect.top) / rect.height) * 100;
+    lastMoveTime = Date.now();
+  }
+
+  finalStage.addEventListener('mousemove', (e) => updatePointer(e.clientX, e.clientY));
+  finalStage.addEventListener('touchstart', (e) => {
+    const t = e.touches[0]; if (t) updatePointer(t.clientX, t.clientY);
+  }, { passive: true });
+  finalStage.addEventListener('touchmove', (e) => {
+    const t = e.touches[0]; if (t) updatePointer(t.clientX, t.clientY);
+  }, { passive: true });
+
+  function animateSpotlight() {
+    const idle = (Date.now() - lastMoveTime) > IDLE_MS;
+    targetRadius = idle ? IDLE_RADIUS : ACTIVE_RADIUS;
+
+    curX += (targetX - curX) * FOLLOW_EASE;
+    curY += (targetY - curY) * FOLLOW_EASE;
+    curRadius += (targetRadius - curRadius) * RADIUS_EASE;
+
+    spotlight.style.setProperty('--mx', curX + '%');
+    spotlight.style.setProperty('--my', curY + '%');
+    spotlight.style.setProperty('--r', Math.max(0, curRadius) + 'px');
+
+    requestAnimationFrame(animateSpotlight);
+  }
+  requestAnimationFrame(animateSpotlight);
 </script>
 
 </body>
