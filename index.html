@@ -128,9 +128,9 @@
 
   <button id="audio-control">Reproducir</button>
 
-  <!-- GIF: arranca solo al cargar; el primer toque en cualquier parte también activa el sonido -->
+  <!-- GIF: no carga nada hasta que se pulse "Reproducir" -->
   <div id="gif-stage">
-    <img src="tu-gif-animado.gif" alt="Rickroll GIF">
+    <img id="gif-el" data-src="tu-gif-animado.gif" alt="Rickroll GIF">
   </div>
 
   <!-- REVELACIÓN FINAL -->
@@ -157,6 +157,7 @@
   const FADE_VOLUME = 0.25;
 
   const gifStage = document.getElementById('gif-stage');
+  const gifEl = document.getElementById('gif-el');
   const audioBtn = document.getElementById('audio-control');
   const finalStage = document.getElementById('final-stage');
   const spotlight = document.getElementById('spotlight');
@@ -165,42 +166,42 @@
   audioPlayer.loop = true;
   audioPlayer.volume = START_VOLUME;
   let isPlaying = false;
-  let unlocked = false; // ya se logró reproducir al menos una vez
+  let started = false; // true en cuanto se da el primer clic
 
-  function markPlaying() {
-    isPlaying = true;
-    unlocked = true;
-    audioBtn.textContent = "Pausar";
-  }
-  function markBlocked() {
-    isPlaying = false;
-    audioBtn.textContent = "Reproducir";
-  }
+  audioBtn.textContent = "Reproducir";
 
-  // Lo intenta solo, sin pedir clic, apenas carga la página.
-  audioPlayer.play().then(markPlaying).catch(markBlocked);
-
-  // El botón de la esquina SIEMPRE es pausa/reanuda (nunca "iniciar" como acción aparte).
   audioBtn.addEventListener('click', () => {
+    if (!started) {
+      // Primer clic: arranca todo (gif, audio, y el contador de segundos)
+      started = true;
+      gifEl.src = gifEl.dataset.src;
+      audioPlayer.play().then(() => {
+        isPlaying = true;
+        audioBtn.textContent = "Pausar";
+      }).catch(() => {
+        isPlaying = false;
+        audioBtn.textContent = "Reproducir";
+      });
+
+      setTimeout(() => {
+        gifStage.classList.add('hide');
+        fadeVolumeTo(FADE_VOLUME, 800);
+      }, 12000);
+      return;
+    }
+
+    // Después del primer clic, el botón es solo pausa/reanuda
     if (isPlaying) {
       audioPlayer.pause();
-      markBlocked();
+      audioBtn.textContent = "Reproducir";
+      isPlaying = false;
     } else {
-      audioPlayer.play().then(markPlaying).catch(markBlocked);
+      audioPlayer.play().then(() => {
+        isPlaying = true;
+        audioBtn.textContent = "Pausar";
+      });
     }
   });
-
-  // Si el navegador bloqueó el autoplay, el primer toque en el GIF (algo que la
-  // persona hace de forma natural) también sirve para arrancar el sonido.
-  gifStage.addEventListener('click', () => {
-    if (!unlocked) audioPlayer.play().then(markPlaying).catch(markBlocked);
-  });
-
-  // A los 12 segundos: se va el GIF, se revela el panel final y el audio baja a 25%
-  setTimeout(() => {
-    gifStage.classList.add('hide');
-    fadeVolumeTo(FADE_VOLUME, 800);
-  }, 12000);
 
   function fadeVolumeTo(target, durationMs) {
     const startVol = audioPlayer.volume;
